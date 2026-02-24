@@ -7,3 +7,8 @@ type User struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
+type UserCtx string
+
+const (
+	ID UserCtx = "userID"
+)

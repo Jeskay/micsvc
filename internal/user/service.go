@@ -3,6 +3,8 @@ package user
 import (
 	"errors"
 
+	"golang.org/x/crypto/bcrypt"
+
 	dto "github.com/Jeskay/micsvc/internal/dto"
 )
 
@@ -15,6 +17,11 @@ func NewUserService(storage dto.UserRepository) *Service {
 }
 
 func (s *Service) Add(user *dto.User) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), 8)
+	if err != nil {
+		return err
+	}
+	user.Password = string(hash)
 	if ok, _ := s.storage.Get(user.ID); !ok {
 		return s.storage.Set(user.ID, user)
 	}
