@@ -33,7 +33,7 @@ func (s *UserServer) Login(ctx context.Context, r *proto.LoginRequest) (*proto.L
 
 func (s *UserServer) Register(ctx context.Context, r *proto.RegisterUser) (*proto.StatusResponse, error) {
 	if err := s.authSvc.Register(&dto.User{ID: r.Id, Password: r.Password}); err != nil {
-		return &proto.StatusResponse{Code: http.StatusBadGateway}, err
+		return &proto.StatusResponse{Code: http.StatusBadRequest}, err
 	}
 	return &proto.StatusResponse{Code: http.StatusCreated}, nil
 }

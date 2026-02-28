@@ -3,7 +3,6 @@ package transport
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/Jeskay/micsvc/internal/transport/http/handlers"
@@ -30,7 +29,6 @@ func (s *HTTPServer) Run(addr string) error {
 }
 
 func (s *HTTPServer) Shutdown(ctx context.Context) error {
-	log.Println("Initiating server shutdown")
 	if err := s.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("server shutdown: %w", err)
 	}
