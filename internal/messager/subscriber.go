@@ -2,7 +2,7 @@ package messager
 
 type subscriber struct {
 	msg       chan Message
-	closeFunc func()
+	closeSlow func() error
 }
 
 type Message struct {

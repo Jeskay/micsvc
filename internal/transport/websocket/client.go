@@ -22,7 +22,7 @@ type WebsocketClient struct {
 }
 
 func NewWebSocketClient(id string) *WebsocketClient {
-	return &WebsocketClient{clientID: id, timeout: time.Second * 10}
+	return &WebsocketClient{clientID: id, timeout: time.Second * 10, close: make(chan struct{})}
 }
 
 func (c *WebsocketClient) Connect(ctx context.Context, addr string) error {
@@ -41,8 +41,11 @@ func (c *WebsocketClient) Connect(ctx context.Context, addr string) error {
 	c.conn = conn
 	c.In = make(chan messager.Message)
 	c.Out = make(chan messager.Message)
+
+	c.wg.Add(2)
 	go c.readLoop(ctx)
 	go c.writeLoop(ctx)
+
 	return nil
 }
 
@@ -57,7 +60,6 @@ func (c *WebsocketClient) Disconnect() error {
 }
 
 func (c *WebsocketClient) readLoop(ctx context.Context) {
-	c.wg.Add(1)
 	defer c.wg.Done()
 	defer close(c.Out)
 	for {
@@ -82,7 +84,6 @@ func (c *WebsocketClient) readLoop(ctx context.Context) {
 }
 
 func (c *WebsocketClient) writeLoop(ctx context.Context) {
-	c.wg.Add(1)
 	defer c.wg.Done()
 	for {
 		select {
@@ -95,13 +96,13 @@ func (c *WebsocketClient) writeLoop(ctx context.Context) {
 				return
 			}
 			wCtx, cancel := context.WithTimeout(ctx, c.timeout)
-			defer cancel()
 			var err error
 			if msg.Binary {
 				err = c.conn.Write(wCtx, websocket.MessageBinary, msg.Data)
 			} else {
 				err = c.conn.Write(wCtx, websocket.MessageText, msg.Data)
 			}
+			cancel()
 			if err != nil {
 				continue
 			}

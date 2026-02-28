@@ -27,7 +27,7 @@ func main() {
 	
 	messageSvc := messager.NewMessagerSvc(func (s string) {
 		log.Println(s)
-	})
+	},cfg.ConnectionTimeout()) 
 	server := transport.NewWebsocketServer(messageSvc)
 
 	c := make(chan os.Signal, 1)

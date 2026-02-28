@@ -83,7 +83,6 @@ func (h *UserHandler) GetAll() http.HandlerFunc {
 		}
 		encoder := json.NewEncoder(w)
 		if err := encoder.Encode(users); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK)

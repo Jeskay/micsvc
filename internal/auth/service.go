@@ -42,6 +42,10 @@ func (s *Service) Login(id int32, password string) (bool, string) {
 }
 
 func (s *Service) Register(user *dto.User) error {
+	ok, user := s.storage.Get(user.ID)
+	if ok {
+		return errors.New("already exists")
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), 8)
 	if err != nil {
 		return err

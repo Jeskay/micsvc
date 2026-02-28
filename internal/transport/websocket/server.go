@@ -25,17 +25,12 @@ func NewMessageServer(svc *messager.Service) *messageServer {
 		svc:     svc,
 		limiter: rate.NewLimiter(rate.Every(time.Millisecond*100), 100),
 	}
-	server.mux.HandleFunc("/subscribe", server.subscribeHandler)
 	server.mux.HandleFunc("/", server.messageHandler)
 	return server
 }
 
 func (s *messageServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
-}
-
-func (s *messageServer) subscribeHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
 }
 
 func (s *messageServer) messageHandler(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +94,9 @@ func (s *messageServer) startReading(ctx context.Context, id string, c *websocke
 				AuthorID: id,
 				Binary:   msgTyp == websocket.MessageBinary,
 				Data:     data,
+			}
+			if err := s.limiter.Wait(ctx); err != nil {
+				return err
 			}
 			if err := s.svc.Message(ctx, msg); err != nil {
 				return err

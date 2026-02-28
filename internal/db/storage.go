@@ -42,6 +42,8 @@ func (s *UserStorage) GetAll() (users []*dto.User) {
 }
 
 func (s *UserStorage) Remove(key int32) error {
+	s.Lock()
 	delete(s.storage, key)
+	s.Unlock()
 	return nil
 }

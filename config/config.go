@@ -10,10 +10,15 @@ type ServerConfig struct {
 	Port        string `env:"PORT"`
 	ExpireAfter int    `env:"TOKEN_EXPIRE"`
 	SecretKey   string `env:"SECRET_KEY"`
+	ConnTimeout int `env:"CONNECTION_TIMEOUT"`
 }
 
 func (sc *ServerConfig) TokenExpiration() time.Duration {
 	return time.Hour * time.Duration(sc.ExpireAfter)
+}
+
+func (sc *ServerConfig) ConnectionTimeout() time.Duration {
+	return time.Second * time.Duration(sc.ConnTimeout)
 }
 
 func (sc *ServerConfig) Address() string {
