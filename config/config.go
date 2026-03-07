@@ -6,11 +6,13 @@ import (
 )
 
 type ServerConfig struct {
-	Host        string `env:"HOST"`
-	Port        string `env:"PORT"`
-	ExpireAfter int    `env:"TOKEN_EXPIRE"`
-	SecretKey   string `env:"SECRET_KEY"`
-	ConnTimeout int `env:"CONNECTION_TIMEOUT"`
+	Host         string `env:"HOST"`
+	Port         string `env:"PORT"`
+	ExpireAfter  int    `env:"TOKEN_EXPIRE"`
+	SecretKey    string `env:"SECRET_KEY"`
+	ConnTimeout  int    `env:"CONNECTION_TIMEOUT"`
+	EventTopic   string `env:"EVENT_TOPIC"`
+	KafkaAddress string `env:"KAFKA_ADDRESS"`
 }
 
 func (sc *ServerConfig) TokenExpiration() time.Duration {

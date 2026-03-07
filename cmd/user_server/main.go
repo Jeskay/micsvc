@@ -3,17 +3,19 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/IBM/sarama"
 	env "github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/Jeskay/micsvc/config"
 	"github.com/Jeskay/micsvc/internal/auth"
 	"github.com/Jeskay/micsvc/internal/db"
+	broker "github.com/Jeskay/micsvc/internal/transport/broker/producer"
 	transport "github.com/Jeskay/micsvc/internal/transport/grpc"
 	"github.com/Jeskay/micsvc/internal/user"
 )
@@ -28,30 +30,42 @@ func main() {
 		log.Fatalf("failed to parse params: %v", err)
 	}
 
-
 	memStore := db.NewUserStorage()
-	userSvc := user.NewUserService(memStore)
+	producer, err := sarama.NewAsyncProducer([]string{cfg.KafkaAddress}, sarama.NewConfig())
+	if err != nil {
+		log.Fatalf("failed to set up event producer: %v", err)
+	}
+	eProducer := broker.NewEventProducer(producer, cfg.EventTopic, cfg.ConnectionTimeout())
+	userSvc := user.NewUserService(memStore, eProducer)
 	authSvc := auth.NewAuthService(&cfg, memStore)
 
 	server := transport.NewRPCServer(userSvc, authSvc)
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 
-	done := make(chan struct{})
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 
-	go func() {
-		<-c
-		log.Println("Initiating server shutdown")
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return server.Run(cfg.Address())
+	})
+
+	g.Go(func() error {
+		return eProducer.Run()
+	})
+
+	g.Go(func() error {
+		<-ctx.Done()
+		eProducer.Shutdown()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer cancel()
-		server.Shutdown(ctx)
-		close(done)
-	}()
+		server.Shutdown(shutdownCtx)
+		return nil
+	})
 
-	if err := server.Run(cfg.Address()); err != nil {
-		log.Fatal(err)
+	if err := g.Wait(); err != nil {
+		log.Printf("Execution interrupted: %v", err)
 	}
 
-	<-done
 	log.Println("Server stopped")
 }

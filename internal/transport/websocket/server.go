@@ -39,7 +39,6 @@ func (s *messageServer) messageHandler(w http.ResponseWriter, r *http.Request) {
 		Subprotocols: []string{""},
 	})
 	if err != nil {
-		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 	defer func() {

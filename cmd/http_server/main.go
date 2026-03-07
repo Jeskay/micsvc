@@ -8,18 +8,21 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/Jeskay/micsvc/config"
 	"github.com/Jeskay/micsvc/internal/db"
+	broker "github.com/Jeskay/micsvc/internal/transport/broker/producer"
 	transport "github.com/Jeskay/micsvc/internal/transport/http"
 	"github.com/Jeskay/micsvc/internal/user"
 )
 
 func main() {
 	var cfg config.ServerConfig
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
 		log.Fatalf("failed to load env: %v", err)
 	}
 	err := env.Parse(&cfg)
@@ -27,28 +30,37 @@ func main() {
 		log.Fatalf("failed to parse params: %v", err)
 	}
 	memStore := db.NewUserStorage()
-	userSvc := user.NewUserService(memStore)
+	producer, err := sarama.NewAsyncProducer([]string{cfg.KafkaAddress}, sarama.NewConfig())
+	if err != nil {
+		log.Fatalf("failed to set up event producer: %v", err)
+	}
+	eProducer := broker.NewEventProducer(producer, cfg.EventTopic, cfg.ConnectionTimeout())
+	userSvc := user.NewUserService(memStore, eProducer)
 	server := transport.NewHTTPServer(userSvc)
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 
-	done := make(chan struct{})
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	g, ctx := errgroup.WithContext(ctx)
 
-	go func() {
-		<-c
-		log.Println("Initiating server shutdown")
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 3)
+	g.Go(func() error {
+		return server.Run(cfg.Address())
+	})
+
+	g.Go(func() error {
+		return eProducer.Run()
+	})
+
+	g.Go(func() error {
+		<-ctx.Done()
+		eProducer.Shutdown()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer cancel()
-		if err:= server.Shutdown(ctx); err != nil {
-			log.Fatalf("Failed to gracefully shutdown: %v",err)
-		}
-		close(done)
-	}()
+		return server.Shutdown(shutdownCtx)
+	})
 
-	if err := server.Run(cfg.Address()); err != nil {
-		log.Fatal(err)
+	if err := g.Wait(); err != nil {
+		log.Printf("Execution interrupted by: %v", err)
 	}
 
-	<-done
 	log.Println("Server stopped")
 }

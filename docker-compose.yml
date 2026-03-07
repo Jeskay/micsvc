@@ -1,0 +1,105 @@
+services:
+  notify_ws:
+   build:
+     context: .
+     dockerfile: ./build/notification/Dockerfile
+   ports:
+     - "${NOTIFY_PORT}:8084"
+   depends_on:
+     kafka:
+       condition: service_healthy
+   environment:
+     HOST: "0.0.0.0"
+     PORT: "8084"
+     TOKEN_EXPIRE: ${TOKEN_EXPIRE}
+     SECRET_KEY: ${AUTH_SECRET}
+     CONNECTION_TIMEOUT: 5
+     KAFKA_ADDRESS: "kafka:9093"
+     EVENT_TOPIC: ${NOTIFY_TOPIC}
+
+  usr_web:
+    build:
+      context: .
+      dockerfile: ./build/user/Dockerfile
+    ports:
+      - "${WEB_PORT}:8083"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8083"
+      TOKEN_EXPIRE: ${TOKEN_EXPIRE}
+      SECRET_KEY: ${AUTH_SECRET}
+      CONNECTION_TIMEOUT: 5
+      KAFKA_ADDRESS: "kafka:9093"
+      EVENT_TOPIC: ${NOTIFY_TOPIC}
+
+  elasticsearch:
+    image: 'docker.elastic.co/elasticsearch/elasticsearch:9.3.1'
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512 -Xmx512
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+
+  kafka:
+    image: apache/kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    # volumes:
+    #   - kafka-data:/var/lib/kafka/data
+    environment:
+      KAFKA_LISTENERS: CONTROLLER://localhost:9091, HOST://0.0.0.0:9092, DOCKER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092, DOCKER://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,HOST:PLAINTEXT
+
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9091
+
+      # Listener to use for broker-to-broker communication
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+
+      # Required for a single node cluster
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 1
+
+      KAFKA_CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:9093"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  kafka-init:
+    image: apache/kafka
+    depends_on: 
+      kafka:
+        condition: service_healthy
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9093 --create --if-not-exists --topic ${NOTIFY_TOPIC}
+      "
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9093
+    depends_on:
+      - kafka
+
+volumes:
+  es_data:
+    driver: local

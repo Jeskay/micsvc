@@ -10,13 +10,13 @@ import (
 )
 
 type HTTPServer struct {
-	userSvc *user.Service
-	server  *http.Server
+	userSvc   *user.Service
+	server    *http.Server
 }
 
 func NewHTTPServer(userSvc *user.Service) *HTTPServer {
 	return &HTTPServer{
-		userSvc: userSvc,
+		userSvc:   userSvc,
 	}
 }
 

@@ -1,3 +1,9 @@
+# Start prod
+production:
+	docker compose --env-file .env.production up
+# Start notification server
+notify_server:
+	go run cmd/notify_server/main.go
 # Start http server
 http_server:
 	go run cmd/http_server/main.go
