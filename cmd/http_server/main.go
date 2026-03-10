@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,6 +23,21 @@ import (
 
 func main() {
 	var cfg config.ServerConfig
+	opts := &slog.HandlerOptions{
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				return slog.Attr{Key: "@timestamp", Value: a.Value}
+			}
+			if a.Key == slog.LevelKey {
+				return slog.Attr{Key: "log.level", Value: slog.StringValue(a.Value.String())}
+			}
+			if a.Key == slog.MessageKey {
+				return slog.Attr{Key: "message", Value: a.Value}
+			}
+			return a
+		},
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
 		log.Fatalf("failed to load env: %v", err)
 	}
@@ -35,7 +51,7 @@ func main() {
 		log.Fatalf("failed to set up event producer: %v", err)
 	}
 	eProducer := broker.NewEventProducer(producer, cfg.EventTopic, cfg.ConnectionTimeout())
-	userSvc := user.NewUserService(memStore, eProducer)
+	userSvc := user.NewUserService(logger.WithGroup("user-service"), memStore, eProducer)
 	server := transport.NewHTTPServer(userSvc)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)

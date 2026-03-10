@@ -25,7 +25,9 @@ services:
       - "${WEB_PORT}:8083"
     depends_on:
       kafka:
-        condition: service_healthy
+          condition: service_healthy
+      logstash:
+          condition: service_healthy
     environment:
       HOST: "0.0.0.0"
       PORT: "8083"
@@ -34,6 +36,27 @@ services:
       CONNECTION_TIMEOUT: 5
       KAFKA_ADDRESS: "kafka:9093"
       EVENT_TOPIC: ${NOTIFY_TOPIC}
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "tcp://127.0.0.1:12201"
+        tag: "docker-{{.Name}}"
+        mode: non-blocking
+
+  logstash:
+    image: 'docker.elastic.co/logstash/logstash:9.3.1'
+    ports:
+      - "12201:12201/udp"
+      - "12201:12201/tcp"
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - elasticsearch
 
   elasticsearch:
     image: 'docker.elastic.co/elasticsearch/elasticsearch:9.3.1'
@@ -42,18 +65,23 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512 -Xmx512
     volumes:
       - es_data:/usr/share/elasticsearch/data
-
+  
+  kibana:
+    image: 'docker.elastic.co/kibana/kibana:9.3.1'
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
 
   kafka:
     image: apache/kafka
     ports:
       - "9092:9092"
       - "9093:9093"
-    # volumes:
-    #   - kafka-data:/var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
     environment:
       KAFKA_LISTENERS: CONTROLLER://localhost:9091, HOST://0.0.0.0:9092, DOCKER://0.0.0.0:9093
       KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092, DOCKER://kafka:9093
@@ -102,4 +130,6 @@ services:
 
 volumes:
   es_data:
+    driver: local
+  kafka-data:
     driver: local

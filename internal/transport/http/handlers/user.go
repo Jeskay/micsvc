@@ -85,6 +85,5 @@ func (h *UserHandler) GetAll() http.HandlerFunc {
 		if err := encoder.Encode(users); err != nil {
 			return
 		}
-		w.WriteHeader(http.StatusOK)
 	}
 }
