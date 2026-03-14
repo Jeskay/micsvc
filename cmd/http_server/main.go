@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"log/slog"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/Jeskay/micsvc/config"
 	"github.com/Jeskay/micsvc/internal/db"
+	"github.com/Jeskay/micsvc/internal/metrics"
 	broker "github.com/Jeskay/micsvc/internal/transport/broker/producer"
 	transport "github.com/Jeskay/micsvc/internal/transport/http"
 	"github.com/Jeskay/micsvc/internal/user"
@@ -51,15 +53,28 @@ func main() {
 		log.Fatalf("failed to set up event producer: %v", err)
 	}
 	eProducer := broker.NewEventProducer(producer, cfg.EventTopic, cfg.ConnectionTimeout())
+
+	HTTPcollector := metrics.NewHTTPMetrics()
 	userSvc := user.NewUserService(logger.WithGroup("user-service"), memStore, eProducer)
-	server := transport.NewHTTPServer(userSvc)
+	metricSvc := metrics.NewService(HTTPcollector)
+
+	usrServer := transport.NewUserHTTP(
+		userSvc,
+		cfg.Address(),
+		transport.UserHTTPOpts{Metrics: HTTPcollector},
+	)
+	metricServer := transport.NewMetricHTTP(metricSvc, cfg.MetricAddress())
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		return server.Run(cfg.Address())
+		return metricServer.ListenAndServe()
+	})
+
+	g.Go(func() error {
+		return usrServer.ListenAndServe()
 	})
 
 	g.Go(func() error {
@@ -71,7 +86,7 @@ func main() {
 		eProducer.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer cancel()
-		return server.Shutdown(shutdownCtx)
+		return errors.Join(usrServer.Shutdown(shutdownCtx), metricServer.Shutdown(shutdownCtx))
 	})
 
 	if err := g.Wait(); err != nil {

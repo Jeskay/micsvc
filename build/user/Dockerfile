@@ -17,7 +17,8 @@ ENV PORT=9091 \
     HOST=localhost \
     TOKEN_EXPIRE=12 \
     CONNECTION_TIMEOUT=2 \
-    KAFKA_ADDRESS=localhost:9093
+    KAFKA_ADDRESS=localhost:9093 \
+    METRIC_PORT=9094
 
 EXPOSE $PORT
 

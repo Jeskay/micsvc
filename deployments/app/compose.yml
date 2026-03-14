@@ -1,0 +1,51 @@
+services:
+  notify_ws:
+   build:
+     context: ../../
+     dockerfile: build/notification/Dockerfile
+   ports:
+     - "${NOTIFY_PORT}:8084"
+   depends_on:
+     kafka:
+       condition: service_healthy
+   environment:
+     HOST: "0.0.0.0"
+     PORT: "8084"
+     TOKEN_EXPIRE: ${TOKEN_EXPIRE}
+     SECRET_KEY: ${AUTH_SECRET}
+     CONNECTION_TIMEOUT: 5
+     KAFKA_ADDRESS: "kafka:9093"
+     EVENT_TOPIC: ${NOTIFY_TOPIC}
+   networks:
+      - internal-net
+
+  usr_web:
+    build:
+      context: ../../
+      dockerfile: build/user/Dockerfile
+    ports:
+      - "${WEB_PORT}:8083"
+      - "9094:9094"
+    depends_on:
+      kafka:
+          condition: service_healthy
+      logstash:
+          condition: service_healthy
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8083"
+      TOKEN_EXPIRE: ${TOKEN_EXPIRE}
+      SECRET_KEY: ${AUTH_SECRET}
+      CONNECTION_TIMEOUT: 5
+      KAFKA_ADDRESS: "kafka:9093"
+      EVENT_TOPIC: ${NOTIFY_TOPIC}
+      METRIC_PORT: "9094"
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "tcp://127.0.0.1:12201"
+        tag: "docker-{{.Name}}"
+        mode: non-blocking
+    networks:
+      - internal-net
+      - log-net

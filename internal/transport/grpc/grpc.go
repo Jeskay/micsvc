@@ -48,7 +48,7 @@ func (s *RPCServer) Shutdown(ctx context.Context) {
 	go func() {
 		s.baseServer.GracefulStop()
 		close(done)
-	}()	
+	}()
 	select {
 	case <-done:
 		log.Println("RPC Server stopped gracefully")

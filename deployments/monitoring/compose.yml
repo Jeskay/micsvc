@@ -1,0 +1,80 @@
+services:
+  logstash:
+    image: 'docker.elastic.co/logstash/logstash:9.3.1'
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    environment:
+      - LS_JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:MinRAMPercentage=75.0
+    ports:
+      - "12201:12201/udp"
+      - "12201:12201/tcp"
+    volumes:
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - elasticsearch
+    networks:
+      - internal-net
+      - log-net
+
+  elasticsearch:
+    image: 'docker.elastic.co/elasticsearch/elasticsearch:9.3.1'
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    volumes:
+      - es_data:/usr/share/elasticsearch/data 
+    networks:
+      - internal-net
+
+  kibana:
+    image: 'docker.elastic.co/kibana/kibana:9.3.1'
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - internal-net
+
+  prometheus:
+    image: prom/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.listen-address=:9096"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9096:9096"
+    networks:
+      - internal-net
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/provisioning/datasources/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+    depends_on:
+      - prometheus
+    networks:
+      - internal-net
+
+volumes:
+  es_data:
+    driver: local
+  grafana-storage:
+    driver: local
+  prometheus_data:
+    driver: local

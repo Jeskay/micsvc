@@ -1,47 +1,44 @@
 package transport
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 
+	"github.com/Jeskay/micsvc/internal/metrics"
 	"github.com/Jeskay/micsvc/internal/transport/http/handlers"
+	"github.com/Jeskay/micsvc/internal/transport/http/middleware"
 	"github.com/Jeskay/micsvc/internal/user"
 )
 
-type HTTPServer struct {
-	userSvc   *user.Service
-	server    *http.Server
+type UserHTTPOpts struct {
+	Metrics *metrics.HTTPMetrics
 }
 
-func NewHTTPServer(userSvc *user.Service) *HTTPServer {
-	return &HTTPServer{
-		userSvc:   userSvc,
-	}
-}
-
-func (s *HTTPServer) Run(addr string) error {
-	s.server = &http.Server{
-		Addr:    addr,
-		Handler: s.handler(),
-	}
-	return s.server.ListenAndServe()
-}
-
-func (s *HTTPServer) Shutdown(ctx context.Context) error {
-	if err := s.server.Shutdown(ctx); err != nil {
-		return fmt.Errorf("server shutdown: %w", err)
-	}
-	return nil
-}
-
-func (s *HTTPServer) handler() http.Handler {
-	userHandler := handlers.NewUserHandler(s.userSvc)
+func NewUserHTTP(userSvc *user.Service, addr string, opts UserHTTPOpts) *http.Server {
+	userHandler := handlers.NewUserHandler(userSvc)
 
 	m := http.NewServeMux()
 	m.HandleFunc("POST /users", userHandler.Add())
 	m.HandleFunc("PUT /users/{id}", userHandler.Update())
 	m.HandleFunc("DELETE /users/{id}", userHandler.Delete())
 	m.HandleFunc("GET /users", userHandler.GetAll())
-	return m
+
+	var handler http.Handler = m
+	if opts.Metrics != nil {
+		handler = middleware.Metrics(opts.Metrics, handler)
+	}
+
+	return &http.Server{
+		Addr:    addr,
+		Handler: handler,
+	}
+}
+
+func NewMetricHTTP(metricSvc *metrics.Service, addr string) *http.Server {
+	m := http.NewServeMux()
+	m.Handle("/metrics", metricSvc.Handler())
+
+	return &http.Server{
+		Addr:    addr,
+		Handler: m,
+	}
 }

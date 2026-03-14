@@ -13,6 +13,7 @@ type ServerConfig struct {
 	ConnTimeout  int    `env:"CONNECTION_TIMEOUT"`
 	EventTopic   string `env:"EVENT_TOPIC"`
 	KafkaAddress string `env:"KAFKA_ADDRESS"`
+	MetricPort   string `env:"METRIC_PORT"`
 }
 
 func (sc *ServerConfig) TokenExpiration() time.Duration {
@@ -25,6 +26,10 @@ func (sc *ServerConfig) ConnectionTimeout() time.Duration {
 
 func (sc *ServerConfig) Address() string {
 	return fmt.Sprintf("%s:%s", sc.Host, sc.Port)
+}
+
+func (sc *ServerConfig) MetricAddress() string {
+	return fmt.Sprintf("%s:%s", sc.Host, sc.MetricPort)
 }
 
 type ClientConfig struct {
